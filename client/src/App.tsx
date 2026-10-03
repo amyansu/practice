@@ -12,13 +12,14 @@ function App() {
     updatedAt: string;
   };
 
-  const getTodos = async (): Promise<Todo[]> => {
-    const response = await fetch(`${import.meta.env.VITE_API_URL}/todos`);
-
-    return response.json();
-  };
   useEffect(() => {
     let isCurrent = true;
+
+    const getTodos = async (): Promise<Todo[]> => {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/todos`);
+
+      return response.json();
+    };
 
     getTodos().then((data) => {
       if (isCurrent) {
@@ -53,7 +54,15 @@ function App() {
 
   // }
 
-  function handleDelete() {}
+  async function handleDelete(id: number) {
+    const response = await fetch(`${import.meta.env.VITE_API_URL}/todos/${id}`, {
+      method: "DELETE",
+    });
+
+    if (response.ok) {
+      setTodos((prevTodos) => prevTodos.filter((todo) => todo.id !== id));
+    }
+  }
 
   return (
     <>
@@ -83,7 +92,7 @@ function App() {
               </button> */}
               <button
                 className="bg-black text-white cursor-pointer p-1"
-                onClick={handleDelete}
+                onClick={() => handleDelete(item.id)}
               >
                 delete
               </button>
