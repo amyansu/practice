@@ -3,6 +3,8 @@ import { useEffect, useState } from "react";
 function App() {
   const [todos, setTodos] = useState<Todo[]>([]);
   const [inputValue, setInputValue] = useState("");
+  const [editingTodoId, setEditingTodoId] = useState<number | null>(null);
+  const [errorMessage, setErrorMessage] = useState("");
 
   type Todo = {
     id: number;
@@ -46,18 +48,54 @@ function App() {
     setInputValue("");
   }
 
+  async function saveTodo() {
+    if (editingTodoId === null || !inputValue.trim()) return;
+
+    try {
+      const response = await fetch(
+        `${import.meta.env.VITE_API_URL}/todo/${editingTodoId}`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title: inputValue.trim() }),
+        },
+      );
+
+      if (!response.ok) {
+        throw new Error("Could not update todo. Please try again.");
+      }
+
+      const updatedTodo: Todo = await response.json();
+      setTodos((currentTodos) =>
+        currentTodos.map((todo) =>
+          todo.id === updatedTodo.id ? updatedTodo : todo,
+        ),
+      );
+      setEditingTodoId(null);
+      setInputValue("");
+      setErrorMessage("");
+    } catch {
+      setErrorMessage("Could not update todo. Please try again.");
+    }
+  }
+
+  function cancelEdit() {
+    setEditingTodoId(null);
+    setInputValue("");
+    setErrorMessage("");
+  }
+
   function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
     setInputValue(e.target.value);
   }
 
-  // function handleEdit(){
-
-  // }
-
   async function handleDelete(id: number) {
-    const response = await fetch(`${import.meta.env.VITE_API_URL}/todos/${id}`, {
-      method: "DELETE",
-    });
+    const response = await fetch(
+      `${import.meta.env.VITE_API_URL}/todos/${id}`,
+      {
+        method: "DELETE",
+      },
+    );
 
     if (response.ok) {
       setTodos((prevTodos) => prevTodos.filter((todo) => todo.id !== id));
@@ -77,19 +115,32 @@ function App() {
           />
           <button
             className="bg-black text-white cursor-pointer p-2"
-            onClick={addTodo}
+            onClick={editingTodoId === null ? addTodo : saveTodo}
           >
-            Add Todo
+            {editingTodoId === null ? "Add Todo" : "Save"}
           </button>
+          {editingTodoId !== null && (
+            <button className="cursor-pointer p-2" onClick={cancelEdit}>
+              Cancel
+            </button>
+          )}
         </div>
+        {errorMessage && <p role="alert">{errorMessage}</p>}
         <ul>
           {todos.map((item) => (
             <li key={item.id} className="flex gap-2 mt-4">
               <input type="checkbox" readOnly />
               <span>{item.title}</span>
-              {/* <button className="bg-black text-white cursor-pointer p-1" onClick={handleEdit}>
+              <button
+                className="bg-black text-white cursor-pointer p-1"
+                onClick={() => {
+                  setEditingTodoId(item.id);
+                  setInputValue(item.title);
+                  setErrorMessage("");
+                }}
+              >
                 edit
-              </button> */}
+              </button>
               <button
                 className="bg-black text-white cursor-pointer p-1"
                 onClick={() => handleDelete(item.id)}
