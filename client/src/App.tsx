@@ -129,8 +129,22 @@ function App() {
         <ul>
           {todos.map((item) => (
             <li key={item.id} className="flex gap-2 mt-4">
-              <input type="checkbox" readOnly />
-              <span>{item.title}</span>
+              <input
+                type="checkbox"
+                checked={item.isCompleted}
+                onChange={(event) => {
+                  setTodos((currentTodos) =>
+                    currentTodos.map((todo) =>
+                      todo.id === item.id
+                        ? { ...todo, isCompleted: event.target.checked }
+                        : todo,
+                    ),
+                  );
+                }}
+              />
+              <span className={item.isCompleted ? "line-through" : ""}>
+                {item.title}
+              </span>
               <button
                 className="bg-black text-white cursor-pointer p-1"
                 onClick={() => {
