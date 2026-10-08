@@ -9,6 +9,10 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+app.get('/', (req, res) => {
+  res.json({ message: "server is running" });
+});
+
 app.get('/todos', async (req, res) => {
   const todos = await db.select().from(todosTable);
   res.json(todos);

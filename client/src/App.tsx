@@ -12,6 +12,7 @@ function App() {
     isCompleted: boolean;
     createdAt: string;
     updatedAt: string;
+    
   };
 
   useEffect(() => {
