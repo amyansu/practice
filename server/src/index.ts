@@ -39,7 +39,6 @@ app.put('/todo/:id', async (req, res) => {
 
 app.delete('/todos/:id', async (req, res) => {
   const id = Number(req.params.id);
-  console.log(id)
   try {
     const deletedUser = await db
       .delete(todosTable)
