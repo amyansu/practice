@@ -12,6 +12,11 @@ function App() {
   const [todos, setTodos] = useState<Todo[]>([]);
   const [inputValue, setInputValue] = useState("");
 
+  function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
+    setInputValue(e.target.value);
+  }
+
+  // GET Todos function
   useEffect(() => {
     async function getTodos() {
       const response = await fetch("http://localhost:3000/todos");
@@ -25,10 +30,31 @@ function App() {
     getTodos();
   }, []);
 
-  function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
-    setInputValue(e.target.value);
+  // Add Multiple Todos with AI
+  async function aiGenerateTodo() {
+    const trimmedValue = inputValue.trim();
+
+    if (!trimmedValue) {
+      return;
+    }
+    try {
+      const res = await fetch("http://localhost:3000/api/todos/ai", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: inputValue }),
+      });
+
+      const data = await res.json();
+
+      setTodos((prev) => [...prev, ...data]);
+      setInputValue("");
+    } catch (err) {
+      console.error("Failed to generate AI tasks:", err);
+      alert("Error generating AI tasks");
+    }
   }
 
+  // Add Single Todo
   async function addTodo() {
     const trimmedValue = inputValue.trim();
 
@@ -50,6 +76,7 @@ function App() {
     setInputValue("");
   }
 
+  // DELETE Todo
   async function deleteTodo(id: number) {
     try {
       const response = await fetch(`http://localhost:3000/todos/${id}`, {
@@ -83,6 +110,13 @@ function App() {
             disabled={inputValue.trim() === ""}
           >
             Add Todo
+          </button>
+          <button
+            className="bg-black text-white cursor-pointer p-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            onClick={aiGenerateTodo}
+            disabled={inputValue.trim() === ""}
+          >
+            AI Add
           </button>
         </div>
 
