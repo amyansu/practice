@@ -1,7 +1,7 @@
 import express from "express";
 import cors from "cors";
 import { db } from './db/index.ts'
-import { eq } from "drizzle-orm";
+import { asc, eq, max } from "drizzle-orm";
 import { todosTable } from "./db/schema.ts";
 import 'dotenv/config';
 import { ChatGoogle } from "@langchain/google";
@@ -27,29 +27,69 @@ const TaskBreakdownSchema = z.object({
 const structuredModel = model.withStructuredOutput(TaskBreakdownSchema);
 
 // --- ROUTES ---
-
 app.get('/', (req, res) => {
-  res.json({ message: "server is running" });
+  try {
+    console.log("server is running");
+    res.json({ message: "server is running" });
+  } catch (error) {
+    console.error("Root route error:", error);
+    res.status(500).json({ error: "Server check failed" });
+  }
 });
 
 // GET: Todos
 app.get('/todos', async (req, res) => {
-  const todos = await db.select().from(todosTable);
-  res.json(todos);
+  try {
+    const todos = await db
+      .select()
+      .from(todosTable)
+      .orderBy(
+        asc(todosTable.position),
+        asc(todosTable.createdAt),
+        asc(todosTable.id),
+      );
+    res.json(todos);
+  } catch (error) {
+    console.error("Database fetch error:", error);
+    res.status(500).json({ error: "Failed to fetch todos from database" });
+  }
 });
 
 // POST: Add manual single Todo
 app.post('/add/todo', async (req, res) => {
-  const { title } = req.body;
-  const newTodo = await db.insert(todosTable).values({ title }).returning();
-  res.status(201).json(newTodo[0]);
+  try {
+    const { title } = req.body;
+
+    if (!title || typeof title !== "string" || !title.trim()) {
+      return res.status(400).json({ error: "Todo title is required" });
+    }
+
+    const [{ maxPosition }] = await db
+      .select({ maxPosition: max(todosTable.position) })
+      .from(todosTable);
+    const newTodo = await db
+      .insert(todosTable)
+      .values({
+        title: title.trim(),
+        isComplete: false,
+        position: (maxPosition ?? -1) + 1,
+      })
+      .returning();
+
+    res.status(201).json(newTodo[0]);
+  } catch (error) {
+    console.error("Todo creation error:", error);
+    res.status(500).json({ error: "Failed to create todo" });
+  }
 });
 
 // POST: AI breakdown and Add Todos
 app.post("/api/todos/ai", async (req, res) => {
   try {
     const { prompt } = req.body;
-    if (!prompt) return res.status(400).json({ error: "Prompt is required" });
+    if (!prompt || typeof prompt !== "string" || !prompt.trim()) {
+      return res.status(400).json({ error: "Prompt is required" });
+    }
 
     // Step A: AI extract the tasks
     const aiResult = await structuredModel.invoke([
@@ -61,8 +101,22 @@ app.post("/api/todos/ai", async (req, res) => {
       return res.json([]);
     }
     // Step B: Bulk insert an array of tasks into Neon DB
-    const recordsToInsert = aiResult.tasks.map((taskTitle) => ({
-      title: taskTitle,
+    const taskTitles = aiResult.tasks
+      .map((taskTitle) => taskTitle.trim())
+      .filter((taskTitle) => taskTitle.length > 0);
+
+    if (taskTitles.length === 0) {
+      return res.json([]);
+    }
+
+    const [{ maxPosition }] = await db
+      .select({ maxPosition: max(todosTable.position) })
+      .from(todosTable);
+    const nextPosition = (maxPosition ?? -1) + 1;
+    const recordsToInsert = taskTitles.map((title, index) => ({
+      title,
+      isComplete: false,
+      position: nextPosition + index,
     }));
 
     const insertedTodos = await db
@@ -78,23 +132,36 @@ app.post("/api/todos/ai", async (req, res) => {
   }
 });
 
-// PUT: Edit Todo
-app.put('/todo/:id', async (req, res) => {
-  const id = Number(req.params.id);
-  const { title } = req.body;
-  const updatedTodo = await db
-    .update(todosTable)
-    .set({
-      title, updatedAt: new Date(),
-    })
-    .where(eq(todosTable.id, id))
-    .returning();
-  res.json(updatedTodo[0]);
+// PATCH: Edit Todo
+app.patch('/todo/:id', async (req, res) => {
+  const id = req.params.id;
+  const { isComplete } = req.body;
+
+  if (typeof isComplete !== "boolean") {
+    return res.status(400).json({ error: "isComplete must be a boolean" });
+  }
+
+  try {
+    const updatedTodo = await db
+      .update(todosTable)
+      .set({ isComplete })
+      .where(eq(todosTable.id, id))
+      .returning();
+
+    if (updatedTodo.length === 0) {
+      return res.status(404).json({ message: "todo not found" });
+    }
+
+    res.json(updatedTodo[0]);
+  } catch (error) {
+    console.error("Todo update error:", error);
+    res.status(500).json({ error: "Failed to update todo" });
+  }
 });
 
 // DELETE: Delete Todo
 app.delete('/todos/:id', async (req, res) => {
-  const id = Number(req.params.id);
+  const id = req.params.id;
   try {
     const deletedUser = await db
       .delete(todosTable)
